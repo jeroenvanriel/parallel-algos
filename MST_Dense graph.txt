@@ -1,0 +1,82 @@
+import math
+import csv
+import numpy as np
+import random
+import matplotlib.pyplot as plt
+import scipy.spatial
+import os
+
+from argparse import ArgumentParser
+from datetime import datetime
+from sklearn.datasets import make_circles, make_moons, make_blobs, make_swiss_roll, make_s_curve
+from pyspark import RDD, SparkConf, SparkContext
+
+
+# See in which connected component s is located.
+def findParent(s, connected):
+    for indx, l in enumerate(connected):
+        if s in l:
+            return indx
+    
+# Kruskals MST algorithm.
+# Edges are defined as (v1, v2, weight), where v1 and v2 are the  names of the corresponding vertices
+def kruskal(E):
+    print("using kruskal on ", len(E), " edges")
+    connected = list()
+    Selected = list()
+    Sorted = sorted(E, key=lambda x: x[2])
+    for (s,t,w) in Sorted:
+        if findParent(s,connected) is None and findParent(t,connected) is None:
+            # we add both,
+            connected.append([s,t])
+            Selected.append([s,t,w])
+        elif findParent(s,connected) is not None and findParent(t,connected) is None:
+            # add t to s
+            connected[findParent(s,connected)].append(t)
+            Selected.append([s,t,w])
+        elif findParent(s,connected) is None and findParent(t,connected) is not None:
+            # add s to t
+            connected[findParent(t,connected)].append(s)
+            Selected.append([s,t,w])
+        elif findParent(s,connected) is not None and findParent(t,connected) is not None:
+            # s and t are in different connected components, so add edge and merge
+            if findParent(s,connected) != findParent(t,connected):
+                connected[findParent(s,connected)].extend(connected.pop(findParent(t,connected)))
+                Selected.append([s,t,w])
+    
+    return Selected
+
+def computeMST(E):
+    print("Doing an itteration with ", len(E), "Edges, with target size: ", target_size)
+    if len(E) <= target_size: # remember y = target_size
+        return kruskal(E)
+    else:
+        print("Doesnt fit so spreading....")
+        machines = math.ceil(len(E)/target_size)
+        RDD = sc.parallelize(E, machines)#.repartition(machines)
+        return computeMST( RDD.mapPartitions(lambda a: kruskal(list(a))).collect() )
+        
+
+eps = 0.2 # set epsilon
+num_points = 500 # How many points do we want
+
+target_size = math.floor(num_points ** (1+eps)) # y = n^(1+eps)
+
+# Some data
+noisy_circles = make_circles(n_samples=num_points, factor=.5,
+                                 noise=0.05)
+points = noisy_circles[0]
+
+# Compute the distance between all points.
+Edges = []
+for i in range(len(points)):
+    for j in range(i+1,len(points)):
+        dist = np.sqrt( (points[i][0]-points[j][0])**2 + (points[i][1]-points[j][1])**2  )
+        Edges.append([i,j,dist])
+
+
+conf = SparkConf().setAppName('MST_Algorithm')
+sc = SparkContext.getOrCreate(conf=conf)
+res = computeMST(Edges)
+
+print(res)
