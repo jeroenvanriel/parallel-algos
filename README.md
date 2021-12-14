@@ -14,4 +14,5 @@ The [Web UI](https://spark.apache.org/docs/3.0.0-preview/web-ui.html) is running
 
 - https://sparkbyexamples.com/pyspark-rdd/
 - https://github.com/spark-examples/pyspark-examples/
+- https://spark.apache.org/docs/latest/rdd-programming-guide.html
 
